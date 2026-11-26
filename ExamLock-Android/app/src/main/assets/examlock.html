@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ExamLock – Aplikasi Ujian Aman</title>
+<style>
+:root{--bg:#f3f6f4;--sf:#fff;--tx:#14231c;--mu:#5b6b63;--ac:#0f6b4f;--ac2:#e8f3ee;--bd:#d5dfd9;--rd:#b3261e;--rd2:#fdeceb;--am:#8a5a00;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1713;--sf:#18241e;--tx:#e8f1ec;--mu:#9bb0a5;--ac:#4fc79a;--ac2:#1d3329;--bd:#2c3f35;--rd:#ff8a80;--rd2:#3a1f1d;--am:#f0c060;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1713;--sf:#18241e;--tx:#e8f1ec;--mu:#9bb0a5;--ac:#4fc79a;--ac2:#1d3329;--bd:#2c3f35;--rd:#ff8a80;--rd2:#3a1f1d;--am:#f0c060;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:16px/1.5 "Segoe UI",Roboto,system-ui,sans-serif;min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:var(--sf);border-bottom:1px solid var(--bd)}
+header b{font-size:18px}header span{color:var(--mu);font-size:13px}
+main{max-width:720px;margin:0 auto;padding:16px}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+h2{margin:0 0 8px;font-size:22px}h3{margin:0 0 8px;font-size:17px}p{margin:6px 0}
+.mu{color:var(--mu);font-size:14px}
+label{display:block;margin:10px 0 4px;font-size:14px;font-weight:600}
+input,select{width:100%;padding:11px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+button{font:inherit;padding:11px 16px;border-radius:8px;border:1px solid var(--ac);background:var(--ac);color:#fff;font-weight:600;cursor:pointer}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button{color:#06170f}}
+button.ghost{background:transparent;color:var(--ac)}button.del{background:transparent;color:var(--rd);border-color:var(--rd);padding:6px 10px}
+button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}
+.tabs{display:flex;gap:6px;margin-bottom:12px}.tabs button{flex:1;background:transparent;color:var(--ac)}.tabs button.on{background:var(--ac);color:#fff}
+.ok{color:var(--ac);font-weight:600}.bad{color:var(--rd);font-weight:600}
+.warn{background:var(--rd2);border:1px solid var(--rd);color:var(--rd);border-radius:8px;padding:10px;margin:8px 0}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+.timer{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.bar{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;background:var(--sf);border-bottom:2px solid var(--ac)}
+iframe{width:100%;height:calc(100vh - 140px);min-height:420px;border:0;background:#fff}
+.ov{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:20px}
+.ov .card{max-width:420px;text-align:center;margin:0}
+ol{padding-left:20px;margin:6px 0}
+</style>
+</head>
+<body>
+<header><b>ExamLock</b><span id="who"></span></header>
+<main id="app"></main>
+<script>
+(function(){
+var mem={};
+function ld(){try{var v=localStorage.getItem("examlock");if(v)return JSON.parse(v)}catch(e){}return mem.s||null}
+function sv(){try{localStorage.setItem("examlock",JSON.stringify(S))}catch(e){}mem.s=S}
+var S=ld()||{
+ exams:[{id:1,nama:"Ujian Dasar Jaringan Komputer",kelas:"X TKJ",url:"",durasi:60,aktif:true}],
+ students:[{nis:"1001",nama:"Siswa Contoh",kelas:"X TKJ",pass:"1234"}],
+ logs:[],done:{}};
+var U=null,view="login",tab="siswa",ex=null,tm=null,left=0,viol=0,MAXV=3,live=false,at="exams";
+var $=function(i){return document.getElementById(i)};
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function log(t){S.logs.unshift({t:new Date().toLocaleString("id-ID"),nis:U?U.nis:"-",nama:U?U.nama:"-",ujian:ex?ex.nama:"-",ket:t});S.logs=S.logs.slice(0,200);sv()}
+function fmt(s){var m=Math.floor(s/60),d=s%60;return(m<10?"0":"")+m+":"+(d<10?"0":"")+d}
+function embed(u){if(!u)return"";return u+(u.indexOf("?")>-1?"&":"?")+"embedded=true"}
+function render(){
+ var a=$("app");$("who").textContent=U?(U.admin?"Admin":U.nama+" • "+U.kelas):"";
+ if(view==="login")return login(a);
+ if(view==="dash")return dash(a);
+ if(view==="prep")return prep(a);
+ if(view==="exam")return exam(a);
+ if(view==="end")return end(a);
+ if(view==="admin")return admin(a);
+}
+function login(a){
+ a.innerHTML='<div class="card"><h2>Masuk ke ExamLock</h2><p class="mu">Ujian Google Form dengan pengawasan keluar halaman.</p>'+
+ '<div class="tabs"><button id="t1" class="'+(tab==="siswa"?"on":"")+'">Siswa</button><button id="t2" class="'+(tab==="admin"?"on":"")+'">Admin</button></div>'+
+ '<label for="u">'+(tab==="siswa"?"NIS":"Nama pengguna")+'</label><input id="u" autocomplete="username">'+
+ '<label for="p">Kata sandi</label><input id="p" type="password" autocomplete="current-password">'+
+ '<p id="er" class="bad"></p><button id="go" style="width:100%">Masuk</button>'+
+ '<p class="mu">Contoh: siswa 1001 / 1234. Admin: admin / admin123.</p></div>';
+ $("t1").onclick=function(){tab="siswa";render()};$("t2").onclick=function(){tab="admin";render()};
+ $("go").onclick=function(){
+  var u=$("u").value.trim(),p=$("p").value;
+  if(tab==="admin"){if(u==="admin"&&p==="admin123"){U={admin:true};view="admin";render()}else $("er").textContent="Nama pengguna atau kata sandi salah.";return}
+  var s=S.students.filter(function(x){return x.nis===u&&x.pass===p})[0];
+  if(s){U=s;view="dash";render()}else $("er").textContent="NIS atau kata sandi salah. Periksa lagi atau hubungi pengawas."};
+}
+function out(){U=null;ex=null;view="login";render()}
+function dash(a){
+ var h='<div class="card"><h2>Selamat datang, '+esc(U.nama)+'</h2><p class="mu">Kelas '+esc(U.kelas)+'</p></div><h3>Ujian yang tersedia</h3>';
+ var l=S.exams.filter(function(e){return e.aktif&&e.kelas===U.kelas});
+ if(!l.length)h+='<div class="card mu">Belum ada ujian untuk kelas Anda. Hubungi pengawas.</div>';
+ l.forEach(function(e){var d=S.done[U.nis+"|"+e.id];
+  h+='<div class="card"><b>'+esc(e.nama)+'</b><p class="mu">Durasi: '+e.durasi+' menit • Status: <span class="'+(d?"ok":"")+'">'+(d?"Selesai":"Belum dikerjakan")+'</span></p><button data-i="'+e.id+'"'+(d?" disabled":"")+'>Mulai ujian</button></div>'});
+ h+='<button class="ghost" id="lo">Keluar</button>';a.innerHTML=h;
+ $("lo").onclick=out;
+ [].forEach.call(a.querySelectorAll("button[data-i]"),function(b){b.onclick=function(){ex=S.exams.filter(function(e){return e.id==b.dataset.i})[0];view="prep";render()}});
+}
+function prep(a){
+ a.innerHTML='<div class="card"><h2>'+esc(ex.nama)+'</h2><p class="mu">Durasi '+ex.durasi+' menit</p><h3>Aturan ujian</h3><ol><li>Jangan keluar dari aplikasi atau membuka aplikasi lain.</li><li>Jangan berpindah tab atau halaman.</li><li>Setiap keluar halaman dicatat. Pelanggaran ke-'+MAXV+' menghentikan ujian.</li><li>Jika ada gangguan, hubungi pengawas.</li><li>Ujian berakhir saat Anda menekan Selesai atau waktu habis.</li></ol></div>'+
+ '<div class="card"><h3>Pemeriksaan perangkat</h3><p>Koneksi internet: <span id="c1">–</span></p><p>Layar penuh: <span id="c2">–</span></p><p>Google Form: <span id="c3">–</span></p><div class="row"><button class="ghost" id="chk">Periksa perangkat</button><button id="st" disabled>Mulai ujian</button></div><button class="ghost" id="bk" style="margin-top:8px">Kembali</button></div>';
+ $("bk").onclick=function(){view="dash";render()};
+ $("chk").onclick=function(){
+  var on=navigator.onLine,fs=!!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen);
+  $("c1").innerHTML=on?'<span class="ok">Terhubung</span>':'<span class="bad">Terputus</span>';
+  $("c2").innerHTML=fs?'<span class="ok">Didukung</span>':'<span class="mu">Tidak didukung (tetap bisa lanjut)</span>';
+  $("c3").innerHTML=ex.url?'<span class="ok">Siap</span>':'<span class="mu">Belum diisi admin, memakai soal contoh</span>';
+  $("st").disabled=!on};
+ $("st").onclick=start;
+}
+function start(){
+ try{var d=document.documentElement;(d.requestFullscreen||d.webkitRequestFullscreen).call(d)}catch(e){}
+ try{AndroidLock.lock()}catch(e){}viol=0;left=ex.durasi*60;live=true;view="exam";log("Ujian dimulai");render();
+ clearInterval(tm);tm=setInterval(function(){left--;var t=$("tm");if(t)t.textContent=fmt(Math.max(left,0));if(left<=0)finish("Waktu habis")},1000);
+}
+function exam(a){
+ var body=ex.url?'<iframe src="'+esc(embed(ex.url))+'" title="Google Form"></iframe>':
+ '<div class="card"><b>Soal contoh</b><p>Perangkat jaringan yang menghubungkan beberapa komputer dalam satu jaringan lokal adalah …</p><p>○ Router<br>○ Switch<br>○ Modem<br>○ Repeater</p><p class="mu">Admin belum memasukkan tautan Google Form untuk ujian ini.</p></div>';
+ a.innerHTML='<div class="bar"><div><b>'+esc(ex.nama)+'</b><div class="mu">Pelanggaran: <span id="vv">'+viol+'</span>/'+MAXV+'</div></div><div class="timer" id="tm">'+fmt(left)+'</div></div>'+body+
+ '<div style="padding:12px"><button id="fin" style="width:100%">Saya sudah mengirim jawaban, selesai</button></div>';
+ $("fin").onclick=function(){if(confirm("Pastikan Anda sudah menekan Kirim pada Google Form. Selesaikan ujian?"))finish("Selesai oleh siswa")};
+}
+function finish(why){
+ if(!live)return;live=false;clearInterval(tm);try{AndroidLock.unlock()}catch(e){}
+ S.done[U.nis+"|"+ex.id]={waktu:new Date().toLocaleString("id-ID"),ket:why,pelanggaran:viol};log(why+" (pelanggaran "+viol+")");sv();
+ try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}
+ var o=$("ov");if(o)o.remove();view="end";render();
+}
+function end(a){
+ var d=S.done[U.nis+"|"+ex.id]||{};
+ a.innerHTML='<div class="card"><h2>Ujian selesai</h2><p>'+esc(d.ket||"")+'. Tunggu arahan pengawas.</p><p class="mu">Pelanggaran tercatat: '+(d.pelanggaran||0)+'</p><button id="bk">Kembali ke dashboard</button></div>';
+ $("bk").onclick=function(){view="dash";render()};
+}
+function violate(why){
+ if(!live)return;viol++;log(why);sv();var v=$("vv");if(v)v.textContent=viol;
+ if(viol>=MAXV){finish("Dihentikan: melebihi batas pelanggaran");return}
+ if(!$("ov")){var o=document.createElement("div");o.id="ov";o.className="ov";
+  o.innerHTML='<div class="card"><h3 class="bad">Ujian sedang berlangsung</h3><p>Anda keluar dari halaman ujian. Kejadian ini dicatat. Pelanggaran: '+viol+' dari '+MAXV+'.</p><button id="rs">Kembali mengerjakan</button></div>';
+  document.body.appendChild(o);$("rs").onclick=function(){o.remove();try{var d=document.documentElement;(d.requestFullscreen||d.webkitRequestFullscreen).call(d)}catch(e){}}}
+}
+document.addEventListener("visibilitychange",function(){if(document.hidden)violate("Berpindah tab atau aplikasi")});
+window.addEventListener("blur",function(){setTimeout(function(){if(live&&!document.hidden&&document.activeElement&&document.activeElement.tagName==="IFRAME")return;if(live&&!document.hasFocus()&&!document.hidden)violate("Halaman kehilangan fokus")},300)});
+window.addEventListener("beforeunload",function(e){if(live){e.preventDefault();e.returnValue=""}});
+document.addEventListener("fullscreenchange",function(){if(live&&!document.fullscreenElement)violate("Keluar dari layar penuh")});
+document.addEventListener("contextmenu",function(e){if(live)e.preventDefault()});
+window.addEventListener("offline",function(){if(live)alert("Koneksi internet terputus. Hubungi pengawas jika tidak kembali.")});
+
+function admin(a){
+ var h='<div class="tabs"><button data-a="exams" class="'+(at==="exams"?"on":"")+'">Ujian</button><button data-a="students" class="'+(at==="students"?"on":"")+'">Siswa</button><button data-a="mon" class="'+(at==="mon"?"on":"")+'">Monitoring</button></div>';
+ if(at==="exams"){
+  h+='<div class="card"><h3>Buat ujian baru</h3><label for="en">Nama ujian</label><input id="en"><label for="ek">Kelas peserta</label><input id="ek" placeholder="X TKJ"><label for="eu">Tautan Google Form</label><input id="eu" placeholder="https://docs.google.com/forms/…/viewform"><label for="ed">Durasi (menit)</label><input id="ed" type="number" value="60" min="5"><p id="er" class="bad"></p><button id="ea">Simpan ujian</button></div>';
+  S.exams.forEach(function(e){h+='<div class="card"><b>'+esc(e.nama)+'</b><p class="mu">Kelas '+esc(e.kelas)+' • '+e.durasi+' menit • '+(e.url?"Form terisi":"Belum ada Form")+'</p><div class="row"><button class="ghost" data-t="'+e.id+'">'+(e.aktif?"Nonaktifkan":"Aktifkan")+'</button><button class="del" data-x="'+e.id+'">Hapus</button></div></div>'});
+ }
+ if(at==="students"){
+  h+='<div class="card"><h3>Tambah siswa</h3><label for="sn">NIS</label><input id="sn"><label for="sm">Nama</label><input id="sm"><label for="sk">Kelas</label><input id="sk" placeholder="X TKJ"><label for="sp">Kata sandi</label><input id="sp"><p id="er" class="bad"></p><button id="sa">Simpan siswa</button></div><div class="card scroll"><table><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th></th></tr>';
+  S.students.forEach(function(s){h+='<tr><td>'+esc(s.nis)+'</td><td>'+esc(s.nama)+'</td><td>'+esc(s.kelas)+'</td><td><button class="del" data-d="'+esc(s.nis)+'">Hapus</button></td></tr>'});h+='</table></div>';
+ }
+ if(at==="mon"){
+  h+='<div class="card scroll"><h3>Hasil ujian</h3><table><tr><th>NIS</th><th>Ujian</th><th>Waktu</th><th>Keterangan</th><th>Pelanggaran</th></tr>';
+  var k=Object.keys(S.done);if(!k.length)h+='<tr><td colspan="5" class="mu">Belum ada siswa yang selesai.</td></tr>';
+  k.forEach(function(key){var p=key.split("|"),d=S.done[key],e=S.exams.filter(function(x){return x.id==p[1]})[0];h+='<tr><td>'+esc(p[0])+'</td><td>'+esc(e?e.nama:p[1])+'</td><td>'+esc(d.waktu)+'</td><td>'+esc(d.ket)+'</td><td>'+d.pelanggaran+'</td></tr>'});
+  h+='</table></div><div class="card scroll"><h3>Catatan kejadian</h3><table><tr><th>Waktu</th><th>Siswa</th><th>Kejadian</th></tr>';
+  if(!S.logs.length)h+='<tr><td colspan="3" class="mu">Belum ada catatan.</td></tr>';
+  S.logs.slice(0,60).forEach(function(l){h+='<tr><td>'+esc(l.t)+'</td><td>'+esc(l.nama)+'</td><td>'+esc(l.ket)+'</td></tr>'});
+  h+='</table></div>';
+ }
+ h+='<button class="ghost" id="lo">Keluar</button>';a.innerHTML=h;$("lo").onclick=out;
+ [].forEach.call(a.querySelectorAll("[data-a]"),function(b){b.onclick=function(){at=b.dataset.a;render()}});
+ var ea=$("ea");if(ea)ea.onclick=function(){var n=$("en").value.trim(),k=$("ek").value.trim(),d=parseInt($("ed").value,10);
+  if(!n||!k||!d){$("er").textContent="Isi nama ujian, kelas, dan durasi.";return}
+  S.exams.push({id:Date.now(),nama:n,kelas:k,url:$("eu").value.trim(),durasi:d,aktif:true});sv();render()};
+ [].forEach.call(a.querySelectorAll("[data-t]"),function(b){b.onclick=function(){S.exams.forEach(function(e){if(e.id==b.dataset.t)e.aktif=!e.aktif});sv();render()}});
+ [].forEach.call(a.querySelectorAll("[data-x]"),function(b){b.onclick=function(){if(confirm("Hapus ujian ini?")){S.exams=S.exams.filter(function(e){return e.id!=b.dataset.x});sv();render()}}});
+ var sa=$("sa");if(sa)sa.onclick=function(){var n=$("sn").value.trim(),m=$("sm").value.trim(),k=$("sk").value.trim(),p=$("sp").value;
+  if(!n||!m||!k||!p){$("er").textContent="Lengkapi NIS, nama, kelas, dan kata sandi.";return}
+  if(S.students.some(function(x){return x.nis===n})){$("er").textContent="NIS sudah terdaftar.";return}
+  S.students.push({nis:n,nama:m,kelas:k,pass:p});sv();render()};
+ [].forEach.call(a.querySelectorAll("[data-d]"),function(b){b.onclick=function(){S.students=S.students.filter(function(s){return s.nis!==b.dataset.d});sv();render()}});
+}
+render();
+})();
+</script>
+</body>
+</html>
